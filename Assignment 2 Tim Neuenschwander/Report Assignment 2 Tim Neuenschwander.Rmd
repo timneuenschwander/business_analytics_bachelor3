@@ -1,0 +1,151 @@
+---
+title: "Assignment 2"
+author: "Tim Neuenschwander"
+date: "4/15/2020"
+output: html_document
+---
+
+The second Assignment consists of the development of two different prediction model.
+
+The Models (unordered list):
+
+* The first prediction model must be a binary classification model. Since we lerned a lot about **logistic regression**, I decided to choose this classification method.
+* The second prediction model must be a **Naive Bayes classifier**.
+
+# Data sets
+
+The task is to predict stockprice change per day with the help of News (25 Texts per day.)
+As you can see here the reddit data set encompasses a date column and a content column. The content provides information that builds the base of both prediction models.
+
+```{r echo = FALSE}
+library(data.table)
+reddit <- read.csv("reddit.csv",stringsAsFactors = FALSE)
+reddit=setDT(reddit)
+str(reddit)
+```
+
+Furthermore, as you can see here the dowjones data set consists of detailed numerical information about the stockmarket:
+
+```{r echo = FALSE}
+dowjones <- read.delim("dowjones.csv", header = TRUE, sep = ";")
+dowjones=setDT(dowjones)
+str(dowjones)
+```
+
+After changing the dates' format into the r standard format, creating an UP and Down dummy variable for the dowjones dataset and performing a simple sediment analysis and the texts in the reddit files, finally all essential Factors were integrated (merged) into the DT datatable.
+
+```{r echo = FALSE, results = FALSE, message = FALSE}
+reddit$Date = as.Date(reddit$Date, format = "%d.%m.%Y")
+dowjones$Date = as.Date(dowjones$Date, format = "%d.%m.%Y")
+
+dowjones$UpDown = ifelse(dowjones$Close > dowjones$Open,"Up","Down")
+
+library(qdap)
+reddit$Content = gsub("[^A-Za-z]", " ", reddit$Content)
+sentiment = polarity(reddit$Content, reddit$Date)
+
+sentimentdata <- sentiment$all
+sentimentdata = setDT(sentimentdata)
+sentimentdata$Date = as.Date(sentimentdata$Date, format = "%d.%m.%Y")
+
+sentimentdata= sentimentdata[,.((WC = sum(wc)), (POLARITY = sum(polarity))), by=,(DATE = Date)]
+colnames(sentimentdata) <- c("Date","wc Sum","polarity Sum")
+
+sentimentdata[order(Date)]
+dowjones[order(Date)]
+
+DT = merge(sentimentdata, dowjones, all=TRUE)
+DT[order(Date)]
+
+DT1 <- na.omit(DT)
+```
+
+From this datatable we created a Training data set (300 days) and a Test data set:
+
+```{r echo = FALSE, message = FALSE, results = FALSE}
+Trainingdata = DT1[Date <= as.Date("0016-03-11")]
+Testdata = DT1[Date > as.Date("0016-03-11")]
+
+data.frame(Trainingdata)
+Trainingdata = setDT(Trainingdata)
+Trainingdata$UpDown = as.factor(Trainingdata$UpDown)
+
+data.frame(Testdata)
+Testdata = setDT(Testdata)
+Testdata$UpDown = as.factor(Testdata$UpDown)
+
+```
+
+```{r echo = FALSE}
+head(Trainingdata)
+head(Testdata)
+```
+
+# Logistic Regression Model
+
+After this i created a logistic regression model and conducted a predction.
+
+```{r echo = FALSE, message = FALSE}
+up = glm(Trainingdata$UpDown ~ Trainingdata$`wc Sum` + Trainingdata$`polarity Sum`, data=Trainingdata, family=binomial(link = "logit"))
+summary(up)
+
+predict.train = predict(up, type="response")
+table(predict.train > 0.5, Trainingdata$UpDown)
+```
+
+Furthermore, next to the Training a test was executed.
+Fallowing performance indicators were calculated.
+
+Performance indicators (unordered list):
+
+* accuracy TP + TN / TP + Tn + FP + FN 
+* sensitivity TP / TP + FN
+* specificity TN / TN + FP
+* precision = TP / TP + FP
+
+```{r echo = FALSE, message = FALSE}
+up2 = glm(Testdata$UpDown ~ Testdata$`wc Sum` + Testdata$`polarity Sum`, data=Testdata, family=binomial(link = "logit"))
+summary(up)
+
+predict.test = predict(up2, Testdata, type="response")
+table(predict.test > 0.5, Testdata$UpDown)
+
+(12+40)/(12+40+5+19) #accuracy 0.6842105
+12/(12+19) # sensitivity / 0.3870968
+40/(40+19) #specificity 0.6779661
+12/(12+19) #precision 0.3870968
+```
+--> The plot can be found in the R script. It illustrates the effect of the crucial factors well. sadly there is no strong corellation to be detected!
+
+In conclusion I must admit that the results are not very satisfactory. In my opinion there is only a weak connection between the news and the performance of the stockmarket, because "bad" news are more attractive and are therefore published irrespective of the world's situation. The degree of destruction of scandal or a catastrophe is not taken into consideration.
+Additionally, the focus shall be shifted to "good" news which occur less often and only when something really good has happened. I suggest that when weighing the positive words or text document parts more, the result will be more promissing.
+
+But let's also look at the second model before discussing possible improvements.
+
+# Naive Bayes Classifier
+
+Firstly the reddit content file is uploaded again and then aggregated on the basis of the dates (per day). Then the text values were converted into corpuses and "standard-pre processed".
+
+But from here I would like to jump to the results directly. The text processing, manipulating and adjusting is to be checked in the R script!
+
+Performance indicators (unordered list):
+
+* accuracy TP + TN / TP + Tn + FP + FN 
+* sensitivity TP / TP + FN
+* specificity TN / TN + FP
+
+```{r echo = FALSE, message = FALSE}
+(12+28)/(12+28+17+19) #accuracy 
+12/(12+19) # sensitivity 
+28/(28+19) #specificity
+```
+
+Unfortunately, also this model is far from predicting the future reality.
+The reasons are the same as mentioned above.
+
+Coming to the last tow questions of the Assignment:
+
+The Corona Virus continously produces "bad" news, however, the stock market is slowly returning to its normal state. Thus the recurring production of "bad" news will lead to even worse performance of the models.
+
+In my opinion these problems and the problems mentioned above can be solve by word detecting and not by generalizing stuff and suming up documents and numbers. Clear signs must be found and model elaborated according to those signs!
+

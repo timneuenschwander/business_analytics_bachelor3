@@ -1,0 +1,226 @@
+---
+title: "Assignment 3 Tim Neueuschwander"
+author: "Tim Neuenschwander"
+date: "4/28/2020"
+output: html_document
+---
+
+##1.1
+Das ist die Struktur der "Taxi daten":
+```{r echo = FALSE, message = FALSE}
+taxidata =read.csv("rides_assignment.csv")
+str(taxidata)
+total_amount2 = taxidata$total_amount
+```
+
+##1.2 Hierarchical clustering
+
+- "center" Diese Methode subtrahiert den Mittelwert einer Variable von jeder Observation dieser Variable.
+- "scale" Diese Methode dividiert jeden Wert einer Variablen durch deren Standardabweichung.
+- "zv" Diese Methode entfernt Variablen mit immer gleich bleibenden Werten (ohne varianz).
+- "BoxCox" Diese Methode transformiert nicht-normalverteilte Variablen in normalverteilte Variablen.
+
+So sieht das Preprocessing der "Taxi daten" aus:
+```{r echo = FALSE, message = FALSE}
+library(caret)
+preProcess(taxidata, method = c("center", "scale","zv","BoxCox"),)
+
+distances = dist(taxidata[1:18], method = "euclidean")
+cluster = hclust(distances, method = "ward.D2") 
+```
+
+Zustzlich wird ein Cluster-Dendrogram, welches die Cluster übersichtlich zeigt, erstellt:
+```{r cluster, echo=FALSE}
+plot(cluster)
+```
+
+Beim Blick auf das Cluster-Dendogramm wird deutlich, dass über einer Höhe von 50 eine ziemlich klare Trennung in Clustern möglich ist!
+
+Hier sieht man die Durchschnittswerte zweier Variablen beim verwenden von drei unterschiedlichen Cluster-methoden:
+```{r echo = FALSE, message = FALSE}
+threeclusters = cutree(cluster, k = 3) 
+
+fiveclusters = cutree(cluster, k = 5)
+
+eightclusters = cutree(cluster, k = 8)
+
+
+tapply(taxidata$total_amount, threeclusters, mean)
+tapply(taxidata$total_amount, fiveclusters, mean)
+tapply(taxidata$total_amount, eightclusters, mean)
+
+tapply(taxidata$trip_distance_miles, threeclusters, mean)
+tapply(taxidata$trip_distance_miles, fiveclusters, mean)
+tapply(taxidata$trip_distance_miles, eightclusters, mean)
+```
+
+##1.3 Kmeans Clustering
+
+```{r echo = FALSE, message = FALSE, results = FALSE}
+threekmeans = kmeans(taxidata[1:18],centers=3,iter.max=10000)
+fivekmeans = kmeans(taxidata[1:18],centers=5,iter.max=10000)
+eightkmeans = kmeans(taxidata[1:18],centers=8,iter.max=10000)
+
+str(threekmeans)
+str(fivekmeans)
+str(eightkmeans)
+```
+
+Die tot.withinss number beträgt ... für die drei "Kmeans-Clustering-Methoden:
+```{r echo = FALSE, message = FALSE}
+threekmeans$tot.withinss
+fivekmeans$tot.withinss
+eightkmeans$tot.withinss
+```
+
+--> Qualitätscheck mit Davies-Bouldin
+```{r echo = FALSE, message = FALSE}
+library(clusterSim)
+index.DB(taxidata[1:18],threekmeans$cluster)$DB
+index.DB(taxidata[1:18],fivekmeans$cluster)$DB
+index.DB(taxidata[1:18],eightkmeans$cluster)$DB 
+index.DB(taxidata[1:18],threeclusters)$DB
+index.DB(taxidata[1:18],fiveclusters)$DB
+index.DB(taxidata[1:18],eightclusters)$DB
+```
+library(clusterSim)
+
+--> eightkmeans ist die beste Lösung, weil sie den tiefsten Davies-Bouldin Koeffizenten hat!
+--> threeclusters) ist die beste Lösung, wenn es ums Erklren geht!
+
+##1.4 Interpretation of Clusters:
+
+Der Einfachheit halber habe ich die hierarchische Clustering-Methode mit 3 Clustern gewählt, die nach der eightkmeans Clustering-Methode die zweit beste Methode ist. 
+Die geringere Anzahl von Clustern sollte es einfacher machen, Variabeln in diese Cluster zu differenzieren.
+
+--> Bitte siehe Code
+```{r echo = FALSE, message = FALSE, results = FALSE}
+tapply(taxidata$total_amount, threeclusters, mean) #very good                  !
+tapply(taxidata$trip_distance_miles, threeclusters, mean) #very good           !
+tapply(taxidata$passenger_count, threeclusters, mean) #bad
+tapply(taxidata$pickup_longitude, threeclusters, mean) #bad
+tapply(taxidata$pickup_latitude, threeclusters, mean) #bad
+tapply(taxidata$dropoff_longitude, threeclusters, mean) #bad
+tapply(taxidata$dropoff_latitude, threeclusters, mean) #bad
+tapply(taxidata$pickup_hour, threeclusters, mean) #bad
+tapply(taxidata$pickup_timeOfDay, threeclusters, mean) #bad
+tapply(taxidata$trip_duration, threeclusters, mean) #very good                 !
+tapply(taxidata$speed, threeclusters, mean) #very good                         !
+tapply(taxidata$temp, threeclusters, mean) #medium - good                 !
+tapply(taxidata$fog, threeclusters, mean) #medium - good
+tapply(taxidata$rain, threeclusters, mean) #medium - good (reversed)
+tapply(taxidata$snow, threeclusters, mean) #bad
+tapply(taxidata$conds, threeclusters, mean) #good                         !
+tapply(taxidata$vis, threeclusters, mean) #good
+tapply(taxidata$holiday, threeclusters, mean) #very good                       !
+```
+
+Nach der Analyse der 3 verschiedenen Cluster kamen nun einige sehr spezifische Merkmale jedes Clusters zum Vorschein. 
+Natürlich gehören die Werte, die bestimmte Merkmale räpresentieren, zu einer Variablen, die gut differenzierbar ist.
+
+Folgende Erkentnisse wurden gemacht:
+Das erste cluster beinhalted kurze und billige fahrten und das dritte cluster lange und teure.
+
+Die Länge der Fahrt, die Fahrt Distanz,der Preis und die Schnelligkeit sind essentielle Variablen. Diese Variabeln besitzen das höchste Differenzirungspotenzial.
+Die geographischen angaben, sowie die meteologischen Angaben sind weniger ausschlaggebend für das Clustering.
+
+##2.1
+Hier wird ein train Index kreiert:
+```{r echo = FALSE}
+taxidata$total_amount = total_amount2
+taxidata$cluster = eightkmeans$cluster
+
+trainIndex <- createDataPartition(taxidata$total_amount, p = .7, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex)
+taxiTrain <- taxidata[ trainIndex,]
+taxiTest  <- taxidata[-trainIndex,]
+```
+
+
+##2.2
+```{r echo = FALSE, message = FALSE}
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(randomForest)
+
+treemodel <- train(total_amount~.,data = taxiTrain,method="rpart", trControl=trainControl("cv",number = 5),tuneLength=3)
+```
+
+Tune length = 
+"Eine ganze Zahl, die die Menge der Granularität im Tuning-Parameter-Gitter angibt. 
+Standardmäßig ist dieses Argument die Anzahl der Ebenen für jeden Tuning-Parameter, die 
+sollte mit dem Zug erzeugt werden. Wenn trainControl die Option search = &quot;random; hat, 
+Dies ist die maximale Anzahl von Tuning-Parameter-Kombinationen, die generiert werden 
+durch die zufällige Suche. ( HINWEIS: Wenn angegeben, muss dieses Argument benannt werden. )
+Source:https://stackoverflow.com/questions/38859705/r-understanding-caret-traintunelength-and-svm-methods-from-kernlab"
+
+Hier ist das tree Modell das zuvor erstellt wurde abgezeichnet(--> Bitte siehe Code): 
+```{r treemodel, echo=FALSE}
+plot(treemodel)
+```
+
+
+##2.3
+
+Mit der postResample Funktion ergibt sich Folgendes:
+```{r echo = FALSE, message = FALSE}
+library(dplyr)
+library(magrittr)
+library(knitr)
+predict.tree <- treemodel %>% predict(taxiTest)
+
+postResample(pred = predict.tree,obs = taxiTest$total_amount)
+```
+
+
+##2.4
+
+Als Vergleichsmodel nehme ich die Taxidaten ohne Cluster und benutze die Elastic Net Regression:
+
+```{r echo = FALSE, message = FALSE}
+taxidata2 <- taxidata
+taxidata2$total_amount <- taxidata$total_amount
+
+trainIndex2 <- createDataPartition(taxidata2$total_amount, p = .7, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex2)
+taxiTrain2 <- taxidata2[ trainIndex2,]
+taxiTest2  <- taxidata2[-trainIndex2,]
+
+treemodel2 <- train(total_amount~.,data = taxiTrain2,method="enet", trControl=trainControl("cv",number = 5))
+```
+
+```{r treemodel2, echo=FALSE}
+plot(treemodel2)
+```
+
+```{r echo = FALSE, message = FALSE}
+predict.tree2 <- treemodel2 %>% predict(taxiTest2)
+head(predict.tree2)
+
+postResample(pred = predict.tree2,obs = taxiTest2$total_amount)
+```
+
+Das letztere Model weist eine sehr hohe (bessere) Faehigkeit, die Varianz der Input variablen zu erklären, auf.
+
+#2.5
+
+library(caretEnsemble)
+
+my_control <- trainControl(method="boot", savePredictions="final", classProbs=TRUE, index=createResample(taxiTrain2$total_amount, 25),summaryFunction=twoClassSummary,"cv")
+modelense <- caretList(total_amount~., data=taxiTrain2, methodList = c("enet","rpart"), trControl = my_control)
+
+--> Small problem!!!
+
+stackedensemble <- caretEnsemble(modelense,metric="RMSE")
+summary(stackedensemble)
+
+predict.ensemble <- stackedensemble %>% predict(taxiTest2)
+postResample(pred = predict.ensemble, obs = taxiTest2$total_amount)
+
+RMSE  Rsquared       MAE 
+3.5922003 0.9116329 1.6013576 
